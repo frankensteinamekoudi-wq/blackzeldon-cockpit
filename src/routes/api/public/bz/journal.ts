@@ -27,9 +27,10 @@ function sanitizeEntry(e: any): Partial<JournalRecord> | null {
 
 export function handleGetJournal(req: Request, res: Response) {
   try {
-    const client = typeof req.query.client === 'string' ? req.query.client.slice(0, 64) : undefined;
+    const owner = typeof res.locals.userId === 'string' ? res.locals.userId : '';
+    if (!owner) return res.status(401).json({ error: 'Connexion requise.' });
     const days = Math.min(3650, parseInt(String(req.query.days), 10) || 3650);
-    res.json({ entries: db.getJournalEntries(client, days) });
+    res.json({ entries: db.getJournalEntries(owner, days) });
   } catch (e: any) {
     res.status(500).json({ error: e?.message || 'Server error' });
   }
@@ -37,10 +38,12 @@ export function handleGetJournal(req: Request, res: Response) {
 
 export function handlePostJournal(req: Request, res: Response) {
   try {
-    const { client, entries } = req.body || {};
+    const owner = typeof res.locals.userId === 'string' ? res.locals.userId : '';
+    if (!owner) return res.status(401).json({ error: 'Connexion requise.' });
+    const { entries } = req.body || {};
     if (!Array.isArray(entries) || entries.length > 100) return res.status(400).json({ error: 'entries invalide (max 100).' });
     const clean = entries.map(sanitizeEntry).filter(Boolean) as Partial<JournalRecord>[];
-    db.saveJournalEntries(str(client, 64) || 'anonymous', clean);
+    db.saveJournalEntries(owner, clean);
     res.json({ success: true, count: clean.length });
   } catch (e: any) {
     res.status(500).json({ error: e?.message || 'Server error' });

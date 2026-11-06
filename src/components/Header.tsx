@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, ShieldCheck, Zap, GitBranch } from 'lucide-react';
+import { Activity, ShieldCheck, Zap, GitBranch, LogOut } from 'lucide-react';
 import { getMinutesUntilNextKZ, KillZone } from '../lib/bz/config.js';
 
 interface HeaderProps {
@@ -8,6 +8,7 @@ interface HeaderProps {
   activeKZ: KillZone | null;
   currentTime: Date;
   onOpenGitExport?: () => void;
+  onSignOut?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -15,7 +16,8 @@ export const Header: React.FC<HeaderProps> = ({
   sourceStatus,
   activeKZ,
   currentTime,
-  onOpenGitExport
+  onOpenGitExport,
+  onSignOut
 }) => {
   const kzInfo = getMinutesUntilNextKZ(currentTime);
 
@@ -85,6 +87,17 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Status Clustered */}
         <div className="flex items-center gap-1.5 text-right">
+          {onSignOut && (
+            <button
+              type="button"
+              onClick={onSignOut}
+              title="Se déconnecter"
+              aria-label="Se déconnecter"
+              className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-slate-700/70 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )}
           {/* Source pill */}
           <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9.5px] font-medium font-mono ${badge.bg}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${badge.dot} pulse-live`} />

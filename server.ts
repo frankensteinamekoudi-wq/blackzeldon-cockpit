@@ -1,6 +1,8 @@
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { clerkMiddleware, getAuth } from '@clerk/express';
+import { publishableKeyFromHost } from '@clerk/shared/keys';
 import { handleLive } from './src/routes/api/public/bz/live.js';
 import { handleCandles } from './src/routes/api/public/bz/candles.js';
 import { handleState } from './src/routes/api/public/bz/state.js';
@@ -15,6 +17,11 @@ import { rateLimitMiddleware, requireAdmin, purgeIdleBuckets } from './src/lib/b
 import { sendTelegramText, sendTelegramSignal } from './src/lib/bz/telegram.server.js';
 import { sendWhatsAppText } from './src/lib/bz/whatsapp.server.js';
 import { startJournalResolver } from './src/lib/bz/journal-resolver.server.js';
+import {
+  CLERK_PROXY_PATH,
+  clerkProxyMiddleware,
+  getClerkProxyHost
+} from './src/middlewares/clerkProxyMiddleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,19 +37,36 @@ async function startServer() {
     res.setHeader('Referrer-Policy', 'no-referrer');
     next();
   });
+  app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+  app.use(clerkMiddleware((req) => ({
+    publishableKey: publishableKeyFromHost(
+      getClerkProxyHost(req) ?? '',
+      process.env.CLERK_PUBLISHABLE_KEY
+    )
+  })));
   app.use(express.json({ limit: '256kb' }));
   app.use('/api/', rateLimitMiddleware);
   setInterval(() => purgeIdleBuckets(), 5 * 60 * 1000).unref();
 
-  // ── Routes publiques (lecture de marché, journal) ──
+  const requireSignedInUser = (req: Request, res: Response, next: NextFunction) => {
+    const userId = getAuth(req).userId;
+    if (!userId) {
+      res.status(401).json({ error: 'Connexion requise.' });
+      return;
+    }
+    res.locals.userId = userId;
+    next();
+  };
+
+  // ── Routes publiques (lecture de marché) ──
   app.get('/api/public/bz/live', handleLive);
   app.get('/api/public/bz/candles', handleCandles);
   app.get('/api/public/bz/state', handleState);
   app.get('/api/public/bz/news', handleNews);
   app.get('/api/public/bz/news-poll', handleNewsPoll);
   app.get('/api/public/bz/forecast', handleForecast);
-  app.get('/api/public/bz/journal', handleGetJournal);
-  app.post('/api/public/bz/journal', handlePostJournal);
+  app.get('/api/public/bz/journal', requireSignedInUser, handleGetJournal);
+  app.post('/api/public/bz/journal', requireSignedInUser, handlePostJournal);
   app.get('/api/public/bz/cycle', handleCycle);
 
   // ── Routes protégées (ADMIN_TOKEN, ou loopback si non défini) ──

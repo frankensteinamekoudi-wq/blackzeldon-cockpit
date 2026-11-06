@@ -30,6 +30,10 @@ class BlackzeldonDB {
   private readonly persistEnabled = process.env.BZ_PERSIST !== 'false';
   private readonly file = path.resolve(process.env.BZ_DATA_DIR || path.join(process.cwd(), 'data'), 'journal.json');
 
+  private storageKey(client: string, key: string) {
+    return JSON.stringify([client, key]);
+  }
+
   constructor() {
     this.loadFromDisk();
     this.recordDiagnostic('SYSTEM_INIT', undefined, `Moteur BZ démarré (${this.journal.size} trades en journal)`);
@@ -40,7 +44,14 @@ class BlackzeldonDB {
     try {
       if (!fs.existsSync(this.file)) return;
       const arr = JSON.parse(fs.readFileSync(this.file, 'utf8'));
-      if (Array.isArray(arr)) for (const r of arr) if (r && typeof r.key === 'string') this.journal.set(r.key, r);
+      if (Array.isArray(arr)) {
+        for (const r of arr) {
+          if (r && typeof r.key === 'string') {
+            const client = typeof r.client === 'string' && r.client ? r.client : 'anonymous';
+            this.journal.set(this.storageKey(client, r.key), { ...r, client });
+          }
+        }
+      }
     } catch (e: any) {
       console.warn('[db] lecture du journal impossible :', e?.message);
     }
@@ -90,12 +101,14 @@ class BlackzeldonDB {
   getDiagnostics() { return this.diagnostics; }
 
   saveJournalEntries(client: string, entries: Partial<JournalRecord>[]) {
+    const owner = client.trim();
+    if (!owner) return;
     for (const e of entries) {
       if (!e || typeof e.key !== 'string' || !e.key) continue;
-      const existing = this.journal.get(e.key);
+      const storageKey = this.storageKey(owner, e.key);
+      const existing = this.journal.get(storageKey);
       const merged: JournalRecord = {
         key: e.key,
-        client: client || 'anonymous',
         pair: e.pair || '',
         timeframe: e.timeframe || '',
         direction: e.direction || null,
@@ -113,7 +126,8 @@ class BlackzeldonDB {
         closedAt: e.closedAt ?? null,
         quality: e.quality || null,
         ...existing,
-        ...e
+        ...e,
+        client: owner
       };
       // Le serveur fait foi : un client ne peut pas rouvrir / réécrire un trade déjà résolu.
       if (existing && existing.result !== 'pending') {
@@ -122,19 +136,24 @@ class BlackzeldonDB {
         merged.exitPrice = existing.exitPrice;
         merged.closedAt = existing.closedAt;
       }
-      this.journal.set(e.key, merged);
+      this.journal.set(storageKey, merged);
     }
-    if (this.journal.size > MAX_JOURNAL) {
-      const sorted = Array.from(this.journal.values()).sort((a, b) => a.timestamp - b.timestamp);
-      for (const r of sorted.slice(0, this.journal.size - MAX_JOURNAL)) this.journal.delete(r.key);
+    const owned = Array.from(this.journal.entries())
+      .filter(([, record]) => record.client === owner)
+      .sort(([, a], [, b]) => a.timestamp - b.timestamp);
+    if (owned.length > MAX_JOURNAL) {
+      for (const [storageKey] of owned.slice(0, owned.length - MAX_JOURNAL)) {
+        this.journal.delete(storageKey);
+      }
     }
     this.schedulePersist();
   }
 
-  updateJournalResult(key: string, patch: Pick<JournalRecord, 'result' | 'rMultiple' | 'exitPrice' | 'closedAt'>) {
-    const r = this.journal.get(key);
+  updateJournalResult(client: string, key: string, patch: Pick<JournalRecord, 'result' | 'rMultiple' | 'exitPrice' | 'closedAt'>) {
+    const storageKey = this.storageKey(client, key);
+    const r = this.journal.get(storageKey);
     if (!r || r.result !== 'pending') return false;
-    this.journal.set(key, { ...r, ...patch });
+    this.journal.set(storageKey, { ...r, ...patch });
     this.schedulePersist();
     return true;
   }
@@ -144,10 +163,10 @@ class BlackzeldonDB {
   }
 
   getJournalEntries(client?: string, days = 3650) {
+    if (!client) return [];
     const minTime = Date.now() - days * 86400000;
     const all = Array.from(this.journal.values()).filter(r => r.timestamp >= minTime);
-    if (client) return all.filter(r => r.client === client || r.client === 'anonymous');
-    return all;
+    return all.filter(r => r.client === client);
   }
 }
 

@@ -23,7 +23,7 @@ export async function resolvePendingJournal(): Promise<number> {
       if (res.freshness === 'unavailable' || res.freshness === 'simulated' || !res.candles.length) continue;
       for (const rec of recs) {
         const patch = resolveRecord(rec, res.candles);
-        if (patch && db.updateJournalResult(rec.key, patch)) {
+        if (patch && db.updateJournalResult(rec.client, rec.key, patch)) {
           closed++;
           db.recordDiagnostic('JOURNAL_RESOLVED', label, `${rec.direction} → ${patch.result} (${patch.rMultiple}R)`);
         }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useAuth } from '@clerk/react';
 import { Header } from './components/Header.js';
 import { BottomTabBar, TabId } from './components/BottomTabBar.js';
 import { PairsRail } from './components/PairsRail.js';
@@ -37,7 +38,9 @@ import { adminFetch } from './lib/bz/admin-client.js';
 
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
-export default function App() {
+export function CockpitApp({ onSignOut }: { onSignOut: () => void }) {
+  const { userId } = useAuth();
+  const storageKey = (key: string) => `bz_user_${userId ?? 'unresolved'}_${key}`;
   const [currentTab, setCurrentTab] = useState<TabId>('scanner');
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
@@ -54,7 +57,7 @@ export default function App() {
   // Sniper $10 Account Balance
   const [sniperBalance, setSniperBalance] = useState<number>(() => {
     try {
-      const v = localStorage.getItem('bz_sniper_balance');
+      const v = localStorage.getItem(storageKey('bz_sniper_balance'));
       return v ? parseFloat(v) : 10.00;
     } catch {
       return 10.00;
@@ -64,7 +67,7 @@ export default function App() {
   // Demo Account & Risk
   const [demoBalance, setDemoBalance] = useState<number>(() => {
     try {
-      const v = localStorage.getItem('bz_demo_balance');
+      const v = localStorage.getItem(storageKey('bz_demo_balance'));
       return v ? parseFloat(v) : 10000;
     } catch {
       return 10000;
@@ -73,7 +76,7 @@ export default function App() {
 
   const [startingBalance, setStartingBalance] = useState<number>(() => {
     try {
-      const v = localStorage.getItem('bz_starting_balance');
+      const v = localStorage.getItem(storageKey('bz_starting_balance'));
       return v ? parseFloat(v) : 10000;
     } catch {
       return 10000;
@@ -82,7 +85,7 @@ export default function App() {
 
   const [riskCapital, setRiskCapital] = useState<number>(() => {
     try {
-      const v = localStorage.getItem('bz_risk_capital');
+      const v = localStorage.getItem(storageKey('bz_risk_capital'));
       return v ? parseFloat(v) : 1000;
     } catch {
       return 1000;
@@ -94,7 +97,7 @@ export default function App() {
   // Auto-Trade State
   const [autoTradeEnabled, setAutoTradeEnabled] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('bz_autotrade_enabled') === 'true';
+      return localStorage.getItem(storageKey('bz_autotrade_enabled')) === 'true';
     } catch {
       return false;
     }
@@ -121,7 +124,7 @@ export default function App() {
   const [tfScores, setTfScores] = useState<Record<string, any>>({});
   const [journalRecords, setJournalRecords] = useState<JournalRecord[]>(() => {
     try {
-      const s = localStorage.getItem('bz_journal_records');
+      const s = localStorage.getItem(storageKey('bz_journal_records'));
       return s ? JSON.parse(s) : [];
     } catch {
       return [];
@@ -161,14 +164,14 @@ export default function App() {
   // Save demo balance
   useEffect(() => {
     try {
-      localStorage.setItem('bz_demo_balance', String(demoBalance));
-      localStorage.setItem('bz_starting_balance', String(startingBalance));
-      localStorage.setItem('bz_risk_capital', String(riskCapital));
-      localStorage.setItem('bz_sniper_balance', String(sniperBalance));
-      localStorage.setItem('bz_autotrade_enabled', String(autoTradeEnabled));
-      localStorage.setItem('bz_journal_records', JSON.stringify(journalRecords.slice(0, 500)));
+      localStorage.setItem(storageKey('bz_demo_balance'), String(demoBalance));
+      localStorage.setItem(storageKey('bz_starting_balance'), String(startingBalance));
+      localStorage.setItem(storageKey('bz_risk_capital'), String(riskCapital));
+      localStorage.setItem(storageKey('bz_sniper_balance'), String(sniperBalance));
+      localStorage.setItem(storageKey('bz_autotrade_enabled'), String(autoTradeEnabled));
+      localStorage.setItem(storageKey('bz_journal_records'), JSON.stringify(journalRecords.slice(0, 500)));
     } catch {}
-  }, [demoBalance, startingBalance, riskCapital, sniperBalance, autoTradeEnabled, journalRecords]);
+  }, [demoBalance, startingBalance, riskCapital, sniperBalance, autoTradeEnabled, journalRecords, userId]);
 
   // Les signaux ne sont autorisés que sur des données RÉELLES et FRAÎCHES.
   const tradingAllowed = selectedPair.feed && dataMeta.freshness === 'live';
@@ -337,12 +340,13 @@ export default function App() {
     return { ...sn, isSniperReady: false, direction: 'WAIT' as const, accountSafetyStatus: 'PROTECTED' as const };
   }, [candles, selectedPair, selectedTF, sniperBalance, pairDataMap, tradingAllowed]);
 
-  const pushRecord = (rec: JournalRecord, client: string) => {
+  const pushRecord = (rec: JournalRecord) => {
     setJournalRecords(prev => [rec, ...prev]);
     fetch('/api/public/bz/journal', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client, entries: [rec] })
+      body: JSON.stringify({ entries: [rec] })
     }).catch(() => {});
     if ((telegramEnabled || whatsappEnabled) && rec.direction && rec.entry != null && rec.sl != null && rec.tp1 != null) {
       const risk = Math.abs(rec.entry - rec.sl);
@@ -357,11 +361,11 @@ export default function App() {
 
   // Open Trade Action (Manual or Bot) — journal papier, jamais d'ordre réel
   const handleExecuteTrade = () => {
-    if (!tradingAllowed || !analysis || !analysis.plan || analysis.direction === 'PAS DE TRADE') return;
+    if (!userId || !tradingAllowed || !analysis || !analysis.plan || analysis.direction === 'PAS DE TRADE') return;
     const p = analysis.plan;
     const rec: JournalRecord = {
       key: `rec_${Date.now()}`,
-      client: 'mobile_cockpit',
+      client: userId,
       pair: selectedPair.label,
       timeframe: selectedTF.label,
       direction: analysis.direction,
@@ -375,14 +379,14 @@ export default function App() {
       closedAt: null,
       quality: analysis.quality
     };
-    pushRecord(rec, 'mobile_cockpit');
+    pushRecord(rec);
   };
 
   const handleExecuteSniperTrade = () => {
-    if (!tradingAllowed || !sniper || !sniper.isSniperReady || sniper.direction === 'WAIT') return;
+    if (!userId || !tradingAllowed || !sniper || !sniper.isSniperReady || sniper.direction === 'WAIT') return;
     const rec: JournalRecord = {
       key: `rec_sniper_${Date.now()}`,
-      client: 'mobile_sniper_10',
+      client: userId,
       pair: selectedPair.label,
       timeframe: selectedTF.label,
       direction: sniper.direction,
@@ -396,7 +400,7 @@ export default function App() {
       closedAt: null,
       quality: 'SNIPER $10'
     };
-    pushRecord(rec, 'mobile_sniper_10');
+    pushRecord(rec);
   };
 
   useEffect(() => { journalRef.current = journalRecords; }, [journalRecords]);
@@ -405,7 +409,7 @@ export default function App() {
   useEffect(() => {
     const sync = async () => {
       try {
-        const res = await fetch('/api/public/bz/journal?days=60');
+        const res = await fetch('/api/public/bz/journal?days=60', { credentials: 'same-origin' });
         if (!res.ok) return;
         const { entries } = await res.json();
         const byKey = new Map<string, JournalRecord>((entries || []).map((e: JournalRecord) => [e.key, e]));
@@ -426,7 +430,8 @@ export default function App() {
         if (missing.length) {
           await fetch('/api/public/bz/journal', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ client: 'mobile_cockpit', entries: missing })
+            credentials: 'same-origin',
+            body: JSON.stringify({ entries: missing.map(r => ({ ...r, client: userId })) })
           });
         }
       } catch { /* hors ligne */ }
@@ -434,7 +439,7 @@ export default function App() {
     sync();
     const t = setInterval(sync, 30000);
     return () => clearInterval(t);
-  }, []);
+  }, [userId]);
 
   // Bot auto-trade (papier) : uniquement sur données live, avec edge empirique non négatif et garde-fou de perte journalière.
   useEffect(() => {
@@ -469,6 +474,7 @@ export default function App() {
         activeKZ={activeKZ}
         currentTime={currentTime}
         onOpenGitExport={() => setIsGitModalOpen(true)}
+        onSignOut={onSignOut}
       />
 
       {/* Main Content Body */}
