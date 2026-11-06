@@ -1,0 +1,5 @@
+{
+  "name": "Blackzeldon Cockpit — Machine à Signaux SMC & Quantum Edge",
+  "description": "Cockpit mobile de trading haute fréquence : détection SMC institutionnelle (OB, FVG, BOS, CHoCH, AMD, SMT), validation probabiliste Quantum Edge, scanner multi-marchés et exécution.",
+  "requestFramePermissions": []
+}

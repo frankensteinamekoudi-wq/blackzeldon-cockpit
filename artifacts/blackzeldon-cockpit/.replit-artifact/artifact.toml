@@ -1,0 +1,32 @@
+kind = "web"
+previewPath = "/"
+title = "Blackzeldon Cockpit"
+description = "Cockpit de trading papier pour consulter les marchés, analyser des configurations et tenir un journal sans envoyer d'ordres réels."
+version = "1.0.0"
+id = "artifacts/blackzeldon-cockpit"
+router = "path"
+
+[[services]]
+name = "web"
+paths = ["/"]
+localPort = 19594
+
+[services.development]
+run = "cd ../.. && npm run dev"
+
+[services.production]
+build = ["bash", "-lc", "cd ../.. && npm run build"]
+
+[services.production.run]
+args = ["bash", "-lc", "cd ../.. && npm start"]
+
+[services.production.run.env]
+PORT = "19594"
+NODE_ENV = "production"
+
+[services.production.health.startup]
+path = "/"
+
+[services.env]
+PORT = "19594"
+BASE_PATH = "/"
