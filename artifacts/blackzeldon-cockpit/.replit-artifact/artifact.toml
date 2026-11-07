@@ -15,10 +15,10 @@ localPort = 19594
 run = "cd ../.. && npm run dev"
 
 [services.production]
-build = ["bash", "-lc", "cd ../.. && npm run build"]
+build = ["bash", "-lc", "npm run build"]
 
 [services.production.run]
-args = ["bash", "-lc", "cd ../.. && npm start"]
+args = ["bash", "-lc", "npm start"]
 
 [services.production.run.env]
 PORT = "19594"
