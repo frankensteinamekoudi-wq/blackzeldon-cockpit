@@ -1,5 +1,6 @@
 import { ClerkProvider, SignIn, SignUp, useAuth, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
+import { frFR } from '@clerk/localizations';
 import { shadcn } from '@clerk/themes';
 import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
 import { CockpitApp } from './App';
@@ -42,10 +43,10 @@ const clerkAppearance = {
     borderRadius: '12px',
   },
   elements: {
-    rootBox: 'w-full flex justify-center',
-    cardBox: 'bg-[#0d121f] rounded-2xl w-[440px] max-w-full overflow-hidden border border-cyan-400/20',
-    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
-    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    rootBox: 'w-full min-w-0 max-w-[440px] flex justify-center',
+    cardBox: '!w-full !max-w-full min-w-0 bg-[#0d121f] rounded-2xl overflow-hidden border border-cyan-400/20',
+    card: '!w-full !max-w-full !min-w-0 !shadow-none !border-0 !bg-transparent !rounded-none',
+    footer: '!w-full !max-w-full !shadow-none !border-0 !bg-transparent !rounded-none',
     headerTitle: 'text-slate-100',
     headerSubtitle: 'text-slate-400',
     socialButtonsBlockButtonText: 'text-slate-200',
@@ -66,7 +67,25 @@ const clerkAppearance = {
     alert: 'bg-rose-950/50 border-rose-800',
     otpCodeFieldInput: 'bg-slate-900 border-slate-700 text-white',
     formFieldRow: 'mb-4',
-    main: 'bg-[#0d121f]',
+    main: '!w-full !max-w-full bg-[#0d121f]',
+  },
+};
+
+const clerkLocalization = {
+  ...frFR,
+  signIn: {
+    ...(frFR.signIn ?? {}),
+    start: {
+      ...(frFR.signIn?.start ?? {}),
+      subtitle: 'Connecte-toi pour retrouver ton cockpit.',
+    },
+  },
+  signUp: {
+    ...(frFR.signUp ?? {}),
+    start: {
+      ...(frFR.signUp?.start ?? {}),
+      subtitle: 'Crée ton compte pour accéder au cockpit.',
+    },
   },
 };
 
@@ -138,7 +157,7 @@ function HomeRoute() {
 
 function SignInPage() {
   return (
-    <main className="grid min-h-screen place-items-center bg-[#070a12] px-4 py-10">
+    <main className="grid min-h-screen min-w-0 place-items-center overflow-x-hidden bg-[#070a12] px-4 py-10">
       <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
     </main>
   );
@@ -146,7 +165,7 @@ function SignInPage() {
 
 function SignUpPage() {
   return (
-    <main className="grid min-h-screen place-items-center bg-[#070a12] px-4 py-10">
+    <main className="grid min-h-screen min-w-0 place-items-center overflow-x-hidden bg-[#070a12] px-4 py-10">
       <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
     </main>
   );
@@ -174,20 +193,7 @@ function ClerkRoutes() {
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
-      localization={{
-        signIn: {
-          start: {
-            title: 'Ravi de te revoir',
-            subtitle: 'Connecte-toi pour retrouver ton cockpit.',
-          },
-        },
-        signUp: {
-          start: {
-            title: 'Créer ton compte',
-            subtitle: 'Ton journal restera séparé des autres comptes.',
-          },
-        },
-      }}
+      localization={clerkLocalization}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
